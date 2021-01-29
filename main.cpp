@@ -1,6 +1,6 @@
 #include <iostream>
 #include <thread>
-#include "ConnectionPool.h"
+#include "ObjectPool.h"
 #include "Connection.h"
 
 using namespace std;
@@ -17,16 +17,24 @@ void getnum() {
         printf("%d\n", i);
 }
 
+struct B {
+    int i;
+};
+
+class A {
+    A(B&& k){}
+};
+
 int main()
 {
 //    auto sthread = std::thread(set);
 //    auto gthread = std::thread(getnum);
 //    sthread.join();
 //    gthread.join();
-
-    auto op = ConnectionPool<CMockConnection, int>::getInstance(4, 10);
+    MockArg arg{909};
+    auto op = ObjectPool<CMockObject,MockArg>::createInstance(4, arg);
     cout<<op->getPoolSize()<<endl;
-    auto con = op->getConnection();
+    auto con = op->getObject();
 //    auto con1 = op->getConnection();
 //    auto con2 = op->getConnection();
 //    auto con3 = op->getConnection();

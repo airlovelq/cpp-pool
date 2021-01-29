@@ -7,4 +7,4 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -Wall -g2 -ggdb -ldl -pthrea
 
 project(ConnectionPool)
 
-add_executable(${PROJECT_NAME} "main.cpp" "Connection.h" "Connection.cpp" "ConnectionPool.h" "ConnectionPool.cpp")
+add_executable(${PROJECT_NAME} "main.cpp" "Connection.h" "ObjectPool.h")
