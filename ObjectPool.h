@@ -5,6 +5,8 @@
 #include <mutex>
 #include <atomic>
 #include <functional>
+#include <thread>
+#include <iostream>
 
 template<typename T>
 struct IsConnection{
@@ -66,6 +68,8 @@ public:
 
     int getPoolSize();
 
+    int getPoolMaxSize();
+
     template<typename T=OBJECT>
     typename std::enable_if<IsConnection<T>::value>::type initPool(int initial_size);
 
@@ -74,7 +78,7 @@ public:
 
     void destroyPool();
 
-    void resetPoolSize(int size);
+    void resetPoolMaxSize(int size);
 
     void destroy() {
         _sg_instance.reset();
@@ -107,6 +111,25 @@ private:
     int _pool_max_size;      // max size
 
     int _pool_size;          // cur size
+
+private:
+    std::mutex _idle_lock;
+
+    std::thread _idle_thread;
+
+    int _max_idle_seconds = 30;
+
+    time_t _last_op_time;
+
+    bool _is_destroyed = false;
+
+public:
+    void beginAutoScaleThread();
+
+private:
+    void autoScale();
+
+    void updateLastOperationTime();
 };
 
 template <typename OBJECT, typename OBJECT_ARGS>
@@ -130,6 +153,8 @@ ObjectPool<OBJECT, OBJECT_ARGS>::ObjectPool(int pool_max_size, const OBJECT_ARGS
 template <typename OBJECT, typename OBJECT_ARGS>
 ObjectPool<OBJECT, OBJECT_ARGS>::~ObjectPool() {
     destroyPool();
+    _is_destroyed = true;
+    _idle_thread.join();
 }
 
 template <typename OBJECT, typename OBJECT_ARGS>
@@ -137,6 +162,7 @@ typename ObjectPool<OBJECT, OBJECT_ARGS>::ObjectPoolPtr ObjectPool<OBJECT, OBJEC
     std::lock_guard<std::mutex> lg(_sg_lock);
     if ( !_sg_instance ) {
         _sg_instance = std::shared_ptr<ObjectPool<OBJECT, OBJECT_ARGS>>(new ObjectPool<OBJECT, OBJECT_ARGS>(pool_max_size, std::move(args)));
+        _sg_instance->autoScale();
     }
     return _sg_instance;
 }
@@ -158,6 +184,7 @@ typename ObjectPool<OBJECT, OBJECT_ARGS>::ObjectPoolPtr ObjectPool<OBJECT, OBJEC
 template <typename OBJECT, typename OBJECT_ARGS>
 template<typename T>
 typename std::enable_if<!IsConnection<T>::value>::type ObjectPool<OBJECT, OBJECT_ARGS>::initPool(int initial_size) {
+    updateLastOperationTime();
     std::lock_guard<std::mutex> lg(_lock);
     for ( int i = 0 ; i < initial_size ; ++i ) {
         _list_con.push_back(std::make_unique<OBJECT>(args));
@@ -168,6 +195,7 @@ typename std::enable_if<!IsConnection<T>::value>::type ObjectPool<OBJECT, OBJECT
 template <typename OBJECT, typename OBJECT_ARGS>
 template<typename T>
 typename std::enable_if<IsConnection<T>::value>::type ObjectPool<OBJECT, OBJECT_ARGS>::initPool(int initial_size) {
+    updateLastOperationTime();
     std::lock_guard<std::mutex> lg(_lock);
     for ( int i = 0 ; i < initial_size ; ++i ) {
         _list_con.push_back(std::make_unique<OBJECT>(args));
@@ -196,6 +224,7 @@ template <typename OBJECT, typename OBJECT_ARGS>
 template<typename T>
 typename std::enable_if<!IsConnection<T>::value>::type ObjectPool<OBJECT, OBJECT_ARGS>::destroyOneObject() {
     _list_con.pop_front();
+    std::cout<<"destroy success"<<std::endl;
 }
 
 template <typename OBJECT, typename OBJECT_ARGS>
@@ -220,8 +249,15 @@ int ObjectPool<OBJECT, OBJECT_ARGS>::getPoolSize() {
 }
 
 template <typename OBJECT, typename OBJECT_ARGS>
+int ObjectPool<OBJECT, OBJECT_ARGS>::getPoolMaxSize() {
+    std::lock_guard<std::mutex> lg(this->_lock);
+    return _pool_max_size;
+}
+
+template <typename OBJECT, typename OBJECT_ARGS>
 template<typename T>
 typename std::enable_if<!IsConnection<T>::value, typename ObjectPool<OBJECT, OBJECT_ARGS>::ObjectAutoRecycle>::type ObjectPool<OBJECT, OBJECT_ARGS>::getObject() {
+    updateLastOperationTime();
     while ( true ) {
         std::lock_guard<std::mutex> lg(_lock);
         if ( _list_con.size() > 0 ) {
@@ -242,6 +278,7 @@ typename std::enable_if<!IsConnection<T>::value, typename ObjectPool<OBJECT, OBJ
 template <typename OBJECT, typename OBJECT_ARGS>
 template<typename T>
 typename std::enable_if<IsConnection<T>::value, typename ObjectPool<OBJECT, OBJECT_ARGS>::ObjectAutoRecycle>::type ObjectPool<OBJECT, OBJECT_ARGS>::getObject() {
+    updateLastOperationTime();
     while ( true ) {
         std::lock_guard<std::mutex> lg(_lock);
         if ( _list_con.size() > 0 ) {
@@ -282,7 +319,7 @@ void ObjectPool<OBJECT, OBJECT_ARGS>::retObject(OBJECT* obj) {
 }
 
 template <typename OBJECT, typename OBJECT_ARGS>
-void ObjectPool<OBJECT, OBJECT_ARGS>::resetPoolSize(int size) {
+void ObjectPool<OBJECT, OBJECT_ARGS>::resetPoolMaxSize(int size) {
     std::lock_guard<std::mutex> lg(_lock);
     if ( size > _pool_max_size ) {
         _pool_max_size = size;
@@ -297,4 +334,37 @@ void ObjectPool<OBJECT, OBJECT_ARGS>::resetPoolSize(int size) {
     }
 }
 
+template <typename OBJECT, typename OBJECT_ARGS>
+void ObjectPool<OBJECT, OBJECT_ARGS>::beginAutoScaleThread() {
+    _idle_thread = std::thread(&ObjectPool<OBJECT, OBJECT_ARGS>::autoScale, this);
+//    _idle_thread.detach();
+}
+
+template <typename OBJECT, typename OBJECT_ARGS>
+void ObjectPool<OBJECT, OBJECT_ARGS>::autoScale() {
+    time_t t;
+    while ( true ) {
+        if ( _is_destroyed ) {
+            std::cout<<"auto scale terminated"<<std::endl;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+        time(&t);
+        if ( t-_last_op_time > 10 ) {
+            if ( _pool_size > _pool_max_size/2 ) {
+                _pool_size = _pool_max_size/2;
+                while ( _list_con.size() > _pool_size ) {
+                    destroyOneObject();
+                }
+            }
+
+        }
+    }
+}
+
+template <typename OBJECT, typename OBJECT_ARGS>
+void ObjectPool<OBJECT, OBJECT_ARGS>::updateLastOperationTime() {
+    std::lock_guard<std::mutex> lg(_idle_lock);
+    time(&_last_op_time);
+}
 #endif

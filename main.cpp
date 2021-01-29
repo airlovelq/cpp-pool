@@ -2,7 +2,7 @@
 #include <thread>
 #include "ObjectPool.h"
 #include "Connection.h"
-
+#include <unistd.h>
 using namespace std;
 
 int i = 0;
@@ -32,13 +32,23 @@ int main()
 //    sthread.join();
 //    gthread.join();
     MockArg arg{909};
-    auto op = ObjectPool<CMockObject,MockArg>::createInstance(4, arg);
+    auto op = ObjectPool<CMockObject,MockArg>::createInstance(8, arg);
+    op->beginAutoScaleThread();
     cout<<op->getPoolSize()<<endl;
     auto con = op->getObject();
-//    auto con1 = op->getConnection();
-//    auto con2 = op->getConnection();
-//    auto con3 = op->getConnection();
-//    auto con4 = op.getConnection();
+//    op->getObject();
+//    op->getObject();
+//    op->getObject();
+//    op->getObject();
+//    op->getObject();
+    {
+    auto con1 = op->getObject();
+    auto con2 = op->getObject();
+    auto con3 = op->getObject();
+    auto con4 = op->getObject();
+    auto con5 = op->getObject();
+    }
+
 //    op.getConnection();
 //    op.getConnection();
 //    op.getConnection();
@@ -52,13 +62,15 @@ int main()
     cout<<op->getPoolSize()<<endl;
 //    op.retConnect(con);
     cout<<op->getPoolSize()<<endl;
-
-    op->destroy();
-    op.reset();
+    sleep(30);
+    cout<<op->getPoolSize()<<endl;
+    cout<<op->getPoolMaxSize()<<endl;
+//    op->destroy();
+//    op.reset();
 //    op->resetPoolSize(2);
 //    con2.reset();
 //    con3.reset();
-    con.reset();
+//    con.reset();
 //    std::move(con2);
 //    std::move(con3);
     cout << "Hello World!" << endl;
