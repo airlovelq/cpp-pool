@@ -16,23 +16,12 @@ struct IsConnection{
     const static bool value = sizeof(Test<T>(0)) == sizeof(char);
 };
 
-
-//template<typename T, typename Arg>
-//struct IsObjectArgsMatch {
-//    template<typename = decltype (T(Arg()))>
-//      static char __test(int);
-
-//    template<typename>
-//      static int __test(...);
-
-//    const static bool value = sizeof(__test<T>(0)) == sizeof(char);
-//};
-
 template <typename OBJECT, typename OBJECT_ARGS>
 class ObjectPool {
-//    static_assert (IsObjectArgsMatch<OBJECT, OBJECT_ARGS>::value, "object arg not match" );
+
     static_assert (std::is_constructible<OBJECT, OBJECT_ARGS>::value, "object arg not match" );
     static_assert (std::is_copy_constructible<OBJECT_ARGS>::value, "object arg not copyable" );
+
     using ObjectRecycleFunc = std::function<void(OBJECT*)>;
 
     using ObjectAutoRecycle = std::unique_ptr<OBJECT, std::function<void(OBJECT*)>>;
@@ -80,9 +69,6 @@ public:
 
     void resetPoolMaxSize(int size);
 
-    void destroy() {
-        _sg_instance.reset();
-    }
 
 private:
     template<typename T = OBJECT>
@@ -337,7 +323,6 @@ void ObjectPool<OBJECT, OBJECT_ARGS>::resetPoolMaxSize(int size) {
 template <typename OBJECT, typename OBJECT_ARGS>
 void ObjectPool<OBJECT, OBJECT_ARGS>::beginAutoScaleThread() {
     _idle_thread = std::thread(&ObjectPool<OBJECT, OBJECT_ARGS>::autoScale, this);
-//    _idle_thread.detach();
 }
 
 template <typename OBJECT, typename OBJECT_ARGS>

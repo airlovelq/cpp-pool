@@ -62,7 +62,7 @@ int main()
     cout<<op->getPoolSize()<<endl;
 //    op.retConnect(con);
     cout<<op->getPoolSize()<<endl;
-    sleep(30);
+    sleep(20);
     cout<<op->getPoolSize()<<endl;
     cout<<op->getPoolMaxSize()<<endl;
 //    op->destroy();
