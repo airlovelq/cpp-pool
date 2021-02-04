@@ -32,7 +32,7 @@ int main()
 //    sthread.join();
 //    gthread.join();
     MockArg arg{909};
-    auto op = ObjectPool<CMockObject,MockArg>::createInstance(8, arg);
+    auto op = ObjectPool<CMockObject>::createInstance(8);
     op->beginAutoScaleThread();
     cout<<op->getPoolSize()<<endl;
     auto con = op->getObject();

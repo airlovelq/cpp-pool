@@ -45,8 +45,8 @@ struct MockArg {
 
 class CMockObject {
 public:
-    CMockObject() = delete;
-    CMockObject(const MockArg& i) {
+//    CMockObject() = delete;
+    CMockObject() {
         std::cout<<"build object"<<std::endl;
     }
 
