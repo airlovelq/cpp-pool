@@ -23,7 +23,7 @@ class ObjectPool {
 
     static_assert (std::is_void<OBJECT_ARGS>::value && std::is_constructible<OBJECT>::value || std::is_constructible<OBJECT, OBJECT_ARGS>::value, "object arg not match" );
 //    static_assert (!std::is_void<OBJECT_ARGS>::value && std::is_copy_constructible<OBJECT_ARGS>::value, "object arg not copyable" );
-
+public:
     using ObjectRecycleFunc = std::function<void(OBJECT*)>;
 
     using ObjectAutoRecycle = std::unique_ptr<OBJECT, std::function<void(OBJECT*)>>;
